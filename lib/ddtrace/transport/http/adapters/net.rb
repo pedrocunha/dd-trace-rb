@@ -15,8 +15,12 @@ module Datadog
             :timeout,
             :ssl
 
-          # in seconds
+          # In seconds.
           DEFAULT_TIMEOUT = 30
+
+          # If this many seconds have passed since the last request, create a new TCP connection.
+          # In seconds.
+          KEEP_ALIVE_TIMEOUT = 60
 
           # @deprecated Positional parameters are deprecated. Use named parameters instead.
           def initialize(hostname = nil, port = nil, **options)
@@ -39,12 +43,17 @@ module Datadog
             # DEV Initializing +Net::HTTP+ directly help us avoid expensive
             # options processing done in +Net::HTTP.start+:
             # https://github.com/ruby/ruby/blob/b2d96abb42abbe2e01f010ffc9ac51f0f9a50002/lib/net/http.rb#L614-L618
-            req = ::Net::HTTP.new(hostname, port, nil)
+            @req ||= begin
+              req = ::Net::HTTP.new(hostname, port, nil)
 
-            req.use_ssl = ssl
-            req.open_timeout = req.read_timeout = timeout
+              req.use_ssl = ssl
+              req.open_timeout = req.read_timeout = timeout
+              req.keep_alive_timeout = KEEP_ALIVE_TIMEOUT
 
-            req.start(&block)
+              req.start
+            end
+
+            yield @req
           end
 
           def call(env)
@@ -56,8 +65,6 @@ module Datadog
           end
 
           def post(env)
-            post = nil
-
             if env.form.nil? || env.form.empty?
               post = ::Net::HTTP::Post.new(env.path, env.headers)
               post.body = env.body
@@ -80,6 +87,13 @@ module Datadog
 
           def url
             "http://#{hostname}:#{port}?timeout=#{timeout}"
+          end
+
+          def close
+            if @req && @req.started?
+              @req.finish
+              @req = nil
+            end
           end
 
           # Raised when called with an unknown HTTP method

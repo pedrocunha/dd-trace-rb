@@ -3,6 +3,7 @@
 require 'datadog/tracing/tracer'
 require 'datadog/tracing/trace_operation'
 require 'support/faux_writer'
+require 'support/synchronization_helpers'
 
 module TracerHelpers
   # Return a test tracer instance with a faux writer.
@@ -109,5 +110,21 @@ module TracerHelpers
     end
 
     without_warnings { Datadog.send(:reset!) }
+  end
+
+  # Wakes up the main worker thread loop, forcing a flush.
+  # Returns when all traces are flushed from the internal buffer.
+  #
+  # @param [Datadog::Tracing::Workers::AsyncTransport] async_transport
+  def force_synchronous_flush(async_transport, attempts: 50, backoff: 0.1)
+    async_transport.instance_exec do
+      @mutex.synchronize do
+        @shutdown.signal
+      end
+
+      SynchronizationHelpers.try_wait_until(attempts: attempts, backoff: backoff) do
+        @trace_buffer.empty?
+      end
+    end
   end
 end

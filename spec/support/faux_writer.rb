@@ -55,4 +55,6 @@ class FauxWriter < Datadog::Tracing::Writer
       end
     end
   end
+
+  def stop; end
 end

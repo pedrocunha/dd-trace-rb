@@ -1,4 +1,4 @@
-# typed: true
+# typed: false
 
 require 'objspace'
 
@@ -15,6 +15,17 @@ module ObjectSpaceHelper
       # Rough calculation of bytesize; not very accurate.
       object.instance_variables.inject(::ObjectSpace.memsize_of(object)) do |sum, var|
         sum + ::ObjectSpace.memsize_of(object.instance_variable_get(var))
+      end
+    end
+
+    def open_file_descriptors
+      ObjectSpace.each_object(::IO).to_a.sort_by(&:object_id).select do |io|
+        begin
+          !io.closed?
+        rescue IOError
+          # Rescue for "uninitialized stream" errors.
+          false
+        end
       end
     end
   end

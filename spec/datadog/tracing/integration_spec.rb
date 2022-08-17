@@ -45,7 +45,20 @@ RSpec.describe 'Tracer integration tests' do
     it { expect(stats).to include(traces_flushed: 0) }
   end
 
+  before do
+    WebMock.disable!
+    Datadog.configuration.reset!
+  end
+
   after { tracer.shutdown! }
+
+  def wait_for_flush(stat = :traces_flushed, num = 1)
+    test_repeat.times do
+      break if tracer.writer.stats[stat] >= num
+
+      sleep(0.1)
+    end
+  end
 
   describe 'agent receives span' do
     include_context 'agent-based test'
@@ -54,14 +67,6 @@ RSpec.describe 'Tracer integration tests' do
       tracer.trace('my.op') do |span|
         span.service = 'my.service'
         sleep(0.001)
-      end
-    end
-
-    def wait_for_flush(stat, num = 1)
-      test_repeat.times do
-        break if tracer.writer.stats[stat] >= num
-
-        sleep(0.1)
       end
     end
 
@@ -143,24 +148,32 @@ RSpec.describe 'Tracer integration tests' do
   describe 'agent receives short span' do
     include_context 'agent-based test'
 
-    before do
+    def trace
       tracer.trace('my.short.op') do |span|
         @span = span
         span.service = 'my.service'
       end
 
-      @first_shutdown = tracer.shutdown!
+      force_synchronous_flush(tracer.writer.worker)
     end
 
     let(:stats) { tracer.writer.stats }
 
     it do
-      expect(@first_shutdown).to be true
+      trace
+
       expect(@span.finished?).to be true
       expect(stats[:services_flushed]).to be_nil
     end
 
-    it_behaves_like 'flushed trace'
+    it 'reuses the same HTTP connection' do
+      expect { trace }.to change { ObjectSpaceHelper.open_file_descriptors.size }.by(1)
+      expect { trace }.to_not(change { ObjectSpaceHelper.open_file_descriptors })
+    end
+
+    it_behaves_like 'flushed trace' do
+      before { trace }
+    end
   end
 
   describe 'rule sampler' do
@@ -319,6 +332,8 @@ RSpec.describe 'Tracer integration tests' do
           function.call(traces)
         end
 
+      WebMock.enable!
+
       trace # Run test subject
       tracer.shutdown! # Ensure trace is flushed, so we can read writer statistics
     end
@@ -347,6 +362,7 @@ RSpec.describe 'Tracer integration tests' do
     end
 
     after do
+      WebMock.disable!
       Datadog.configuration.tracing.sampling.reset!
     end
 
@@ -467,6 +483,8 @@ RSpec.describe 'Tracer integration tests' do
         tracer.trace('my.short.op') do |span|
           span.service = 'my.service'
         end
+
+        wait_for_flush
 
         threads = Array.new(10) do
           Thread.new { tracer.shutdown! }

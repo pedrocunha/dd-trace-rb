@@ -42,27 +42,15 @@ RSpec.describe 'Datadog integration' do
     end
 
     context 'for file descriptors' do
-      def open_file_descriptors
-        # Unix-specific way to get the current process' open file descriptors and the files (if any) they correspond to
-        Dir['/dev/fd/*'].each_with_object({}) do |fd, hash|
-          hash[fd] =
-            begin
-              File.realpath(fd)
-            rescue SystemCallError # This can fail due to... reasons, and we only want it for debugging so let's ignore
-              nil
-            end
-        end
-      end
-
       it 'closes tracer file descriptors (known flaky test)' do
-        before_open_file_descriptors = open_file_descriptors
+        before_open_file_descriptors = ObjectSpaceHelper.open_file_descriptors
 
         start_tracer
         wait_for_tracer_sent
 
         shutdown
 
-        after_open_file_descriptors = open_file_descriptors
+        after_open_file_descriptors = ObjectSpaceHelper.open_file_descriptors
 
         expect(after_open_file_descriptors.size)
           .to(

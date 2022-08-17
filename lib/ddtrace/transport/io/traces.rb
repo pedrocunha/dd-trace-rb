@@ -43,6 +43,8 @@ module Datadog
               Traces::Response.new(result)
             end]
           end
+
+          def stop; end
         end
 
         # Encoder for IO-specific trace encoding
