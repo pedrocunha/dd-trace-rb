@@ -22,8 +22,8 @@ module Datadog
                   trace = active_trace
                   span = active_span
 
-                  Rails::Reactive::Action.subscribe(op, waf_context) do |action, result, _block|
-                    record = [:block, :monitor].include?(action)
+                  Rails::Reactive::Action.subscribe(op, waf_context) do |result, _block|
+                    record = [:match].include?(result[:code])
                     if record
                       # TODO: should this hash be an Event instance instead?
                       event = {
@@ -38,7 +38,7 @@ module Datadog
                     end
                   end
 
-                  _action, _result, block = Rails::Reactive::Action.publish(op, request)
+                  _result, block = Rails::Reactive::Action.publish(op, request)
                 end
 
                 next [nil, [[:block, event]]] if block

@@ -26,8 +26,8 @@ module Datadog
                   trace = active_trace
                   span = active_span
 
-                  Rack::Reactive::Request.subscribe(op, waf_context) do |action, result, _block|
-                    record = [:block, :monitor].include?(action)
+                  Rack::Reactive::Request.subscribe(op, waf_context) do |result, _block|
+                    record = [:match].include?(result.status)
                     if record
                       # TODO: should this hash be an Event instance instead?
                       event = {
@@ -42,7 +42,7 @@ module Datadog
                     end
                   end
 
-                  _action, _result, block = Rack::Reactive::Request.publish(op, request)
+                  _result, block = Rack::Reactive::Request.publish(op, request)
                 end
 
                 next [nil, [[:block, event]]] if block
@@ -66,8 +66,8 @@ module Datadog
                   trace = active_trace
                   span = active_span
 
-                  Rack::Reactive::Response.subscribe(op, waf_context) do |action, result, _block|
-                    record = [:block, :monitor].include?(action)
+                  Rack::Reactive::Response.subscribe(op, waf_context) do |result, _block|
+                    record = [:match].include?(result.status)
                     if record
                       # TODO: should this hash be an Event instance instead?
                       event = {
@@ -82,7 +82,7 @@ module Datadog
                     end
                   end
 
-                  _action, _result, block = Rack::Reactive::Response.publish(op, response)
+                  _result, block = Rack::Reactive::Response.publish(op, response)
                 end
 
                 next [nil, [[:block, event]]] if block
@@ -107,7 +107,7 @@ module Datadog
                   span = active_span
 
                   Rack::Reactive::RequestBody.subscribe(op, waf_context) do |action, result, _block|
-                    record = [:block, :monitor].include?(action)
+                    record = [:match].include?(result.status)
                     if record
                       # TODO: should this hash be an Event instance instead?
                       event = {
@@ -122,7 +122,7 @@ module Datadog
                     end
                   end
 
-                  _action, _result, block = Rack::Reactive::RequestBody.publish(op, request)
+                  _result, block = Rack::Reactive::RequestBody.publish(op, request)
                 end
 
                 next [nil, [[:block, event]]] if block
